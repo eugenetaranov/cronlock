@@ -1,0 +1,65 @@
+# Cronlock Configuration Example (YAML)
+# Copy this file to cronlock.yaml and customize for your environment
+
+node:
+  # Unique identifier for this node. If not set, will be auto-generated from hostname.
+  # Supports environment variable substitution: ${HOSTNAME}
+  id: "${HOSTNAME:-node-1}"
+
+  # Grace period after job completion before releasing the lock.
+  # Helps handle clock skew between nodes.
+  grace_period: 5s
+
+redis:
+  # Redis server address
+  address: "${REDIS_ADDRESS:-localhost:6379}"
+
+  # Redis password (optional)
+  password: "${REDIS_PASSWORD:-}"
+
+  # Redis database number
+  db: 0
+
+  # Key prefix for all cronlock keys
+  key_prefix: "cronlock:"
+
+jobs:
+  # Example: Daily backup job
+  - name: "backup"
+    schedule: "0 2 * * *"  # 2:00 AM daily
+    command: "/usr/local/bin/backup.sh"
+    timeout: 1h
+    lock_ttl: 2h
+    work_dir: "/var/backups"
+    env:
+      BACKUP_RETENTION: "30"
+    on_success: "/usr/local/bin/notify.sh success backup"
+    on_failure: "/usr/local/bin/notify.sh failure backup"
+
+  # Example: Hourly cleanup job
+  - name: "cleanup"
+    schedule: "0 * * * *"  # Every hour
+    command: "find /tmp -type f -mtime +7 -delete"
+    timeout: 10m
+    lock_ttl: 15m
+
+  # Example: Every 5 minutes health check
+  - name: "health-check"
+    schedule: "*/5 * * * *"
+    command: "curl -sf http://localhost:8080/health || exit 1"
+    timeout: 30s
+    lock_ttl: 1m
+
+  # Example: Disabled job
+  - name: "maintenance"
+    schedule: "0 3 * * 0"  # 3:00 AM every Sunday
+    command: "/usr/local/bin/maintenance.sh"
+    timeout: 4h
+    enabled: false
+
+  # Example: Job with seconds precision (optional seconds field)
+  - name: "metrics-collect"
+    schedule: "*/30 * * * * *"  # Every 30 seconds
+    command: "/usr/local/bin/collect-metrics.sh"
+    timeout: 25s
+    lock_ttl: 30s

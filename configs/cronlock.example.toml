@@ -1,0 +1,57 @@
+# Cronlock Configuration Example (TOML)
+# Copy this file to cronlock.toml and customize for your environment
+
+[node]
+# Unique identifier for this node. If not set, will be auto-generated from hostname.
+id = "${HOSTNAME:-node-1}"
+
+# Grace period after job completion before releasing the lock.
+grace_period = "5s"
+
+[redis]
+# Redis server address
+address = "${REDIS_ADDRESS:-localhost:6379}"
+
+# Redis password (optional)
+password = "${REDIS_PASSWORD:-}"
+
+# Redis database number
+db = 0
+
+# Key prefix for all cronlock keys
+key_prefix = "cronlock:"
+
+# Job definitions
+[[jobs]]
+name = "backup"
+schedule = "0 2 * * *"
+command = "/usr/local/bin/backup.sh"
+timeout = "1h"
+lock_ttl = "2h"
+work_dir = "/var/backups"
+on_success = "/usr/local/bin/notify.sh success backup"
+on_failure = "/usr/local/bin/notify.sh failure backup"
+
+[jobs.env]
+BACKUP_RETENTION = "30"
+
+[[jobs]]
+name = "cleanup"
+schedule = "0 * * * *"
+command = "find /tmp -type f -mtime +7 -delete"
+timeout = "10m"
+lock_ttl = "15m"
+
+[[jobs]]
+name = "health-check"
+schedule = "*/5 * * * *"
+command = "curl -sf http://localhost:8080/health || exit 1"
+timeout = "30s"
+lock_ttl = "1m"
+
+[[jobs]]
+name = "maintenance"
+schedule = "0 3 * * 0"
+command = "/usr/local/bin/maintenance.sh"
+timeout = "4h"
+enabled = false

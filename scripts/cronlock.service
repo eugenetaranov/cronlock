@@ -1,0 +1,54 @@
+[Unit]
+Description=Cronlock - Distributed Cron Scheduler
+Documentation=https://github.com/your-org/cronlock
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=notify
+ExecStart=/usr/local/bin/cronlock --config /etc/cronlock/cronlock.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Graceful shutdown
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+
+# Watchdog
+WatchdogSec=30
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+
+# Allow read access to config
+ReadOnlyPaths=/etc/cronlock
+
+# Allow write access if needed (adjust as necessary)
+# ReadWritePaths=/var/log/cronlock
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=256M
+
+# User/Group (create dedicated user for production)
+# User=cronlock
+# Group=cronlock
+
+# Environment
+Environment=GOMAXPROCS=2
+
+[Install]
+WantedBy=multi-user.target
