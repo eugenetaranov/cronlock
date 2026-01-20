@@ -12,6 +12,23 @@ A distributed cron scheduler with Redis-based locking for exactly-once job execu
 - **Systemd integration**: Notify and watchdog support
 - **Environment variables**: Supports `${VAR}` and `${VAR:-default}` syntax in config
 
+## Why Cronlock over Regular Cron?
+
+| Feature | Cron | Cronlock |
+|---------|------|----------|
+| Multi-node execution | Runs on every node | Exactly-once via Redis locking |
+| Failure handling | Silent failures, check logs manually | `on_failure` hooks for immediate alerts |
+| Success confirmation | No built-in notification | `on_success` hooks for confirmation |
+| Long-running jobs | Can overlap if job exceeds interval | Lock renewal prevents overlap |
+| Node failure | Jobs stop running | Automatic failover to healthy nodes |
+| Monitoring | Parse syslogs or mail | Hooks integrate with any alerting system |
+
+**Key advantages:**
+
+1. **Distributed coordination** - The core differentiator; cron has no awareness of other nodes running the same job
+2. **Built-in observability** - `on_success`/`on_failure` hooks make it trivial to integrate with Slack, PagerDuty, or any alerting system
+3. **No overlapping runs** - Lock-based execution prevents the classic "job still running when next schedule fires" problem
+
 ## Installation
 
 ```bash
