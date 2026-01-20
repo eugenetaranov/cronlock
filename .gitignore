@@ -1,5 +1,5 @@
 # Binaries
-/cronlock
+bin/
 cronlock-test
 *.exe
 

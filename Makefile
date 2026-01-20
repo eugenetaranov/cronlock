@@ -1,10 +1,11 @@
 .PHONY: build test test-cover test-integration test-all clean run lint fmt deps install release release-dry-run release-snapshot release-check
 
-BINARY := cronlock
+BINARY := bin/cronlock
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
 build:
+	@mkdir -p bin
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/cronlock
 
 test:
@@ -20,7 +21,7 @@ test-integration:
 test-all: test test-integration
 
 clean:
-	rm -f $(BINARY) coverage.out coverage.html
+	rm -rf bin/ coverage.out coverage.html
 
 run: build
 	./$(BINARY) --config configs/cronlock.example.yaml
