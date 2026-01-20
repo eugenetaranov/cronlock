@@ -18,7 +18,7 @@ jobs:
       - name: Build
         run: make build
       - name: Verify binary
-        run: ./cronlock --version
+        run: ./bin/cronlock --version
 
   test:
     runs-on: ubuntu-latest
