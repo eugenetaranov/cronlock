@@ -309,7 +309,7 @@ func TestGetJob(t *testing.T) {
 		Schedule: "* * * * *",
 		Command:  "echo test",
 	}
-	s.AddJob(jobCfg)
+	_ = s.AddJob(jobCfg)
 
 	// Get existing job
 	job, ok := s.GetJob("my-job")
@@ -346,7 +346,7 @@ func TestJobs(t *testing.T) {
 
 	// Add jobs
 	for _, name := range []string{"job-a", "job-b", "job-c"} {
-		s.AddJob(config.JobConfig{
+		_ = s.AddJob(config.JobConfig{
 			Name:     name,
 			Schedule: "* * * * *",
 			Command:  "echo " + name,
@@ -375,7 +375,7 @@ func TestScheduler_StartStop(t *testing.T) {
 	s := New(locker, nodeCfg, logger)
 
 	// Add a job
-	s.AddJob(config.JobConfig{
+	_ = s.AddJob(config.JobConfig{
 		Name:     "test",
 		Schedule: "* * * * *",
 		Command:  "echo test",
@@ -401,8 +401,8 @@ func TestScheduler_Entries(t *testing.T) {
 	}
 
 	// Add jobs and check entries
-	s.AddJob(config.JobConfig{Name: "job1", Schedule: "* * * * *", Command: "echo 1"})
-	s.AddJob(config.JobConfig{Name: "job2", Schedule: "*/5 * * * *", Command: "echo 2"})
+	_ = s.AddJob(config.JobConfig{Name: "job1", Schedule: "* * * * *", Command: "echo 1"})
+	_ = s.AddJob(config.JobConfig{Name: "job2", Schedule: "*/5 * * * *", Command: "echo 2"})
 
 	entries = s.Entries()
 	if len(entries) != 2 {

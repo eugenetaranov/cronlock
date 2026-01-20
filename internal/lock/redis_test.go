@@ -327,7 +327,7 @@ func TestRedisLocker_ReacquireAfterRelease(t *testing.T) {
 		t.Fatal("first Acquire() = false")
 	}
 
-	locker.Release(ctx, "test-job")
+	_ = locker.Release(ctx, "test-job")
 
 	acquired2, err := locker.Acquire(ctx, "test-job", 30*time.Second)
 	if err != nil {
