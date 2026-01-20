@@ -105,7 +105,7 @@ func main() {
 	}
 
 	// Notify systemd we're stopping
-	daemon.SdNotify(false, daemon.SdNotifyStopping)
+	_, _ = daemon.SdNotify(false, daemon.SdNotifyStopping)
 
 	// Stop scheduler gracefully
 	sched.Stop()
@@ -148,7 +148,7 @@ func startWatchdog(logger *slog.Logger) func() {
 				ticker.Stop()
 				return
 			case <-ticker.C:
-				daemon.SdNotify(false, daemon.SdNotifyWatchdog)
+				_, _ = daemon.SdNotify(false, daemon.SdNotifyWatchdog)
 			}
 		}
 	}()
