@@ -51,7 +51,7 @@ cp configs/cronlock.example.yaml cronlock.yaml
 2. Start cronlock:
 
 ```bash
-./cronlock --config cronlock.yaml
+./bin/cronlock --config cronlock.yaml
 ```
 
 ## Configuration
