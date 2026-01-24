@@ -31,8 +31,18 @@ A distributed cron scheduler with Redis-based locking for exactly-once job execu
 
 ## Installation
 
+### Linux (Recommended)
+
+The install script downloads the latest release, installs the binary, creates a starter config, and sets up the systemd service:
+
 ```bash
-# Build from source
+curl -fsSL https://raw.githubusercontent.com/eugenetaranov/cronlock/main/scripts/install.sh | sudo bash
+```
+
+### Build from Source
+
+```bash
+# Build binary to bin/
 make build
 
 # Or install to $GOPATH/bin
@@ -126,11 +136,24 @@ Special expressions:
 
 ## Systemd Integration
 
-Install the systemd service:
+The install script (`scripts/install.sh`) automatically sets up the systemd service. After installation:
+
+```bash
+# Edit config with your jobs
+sudo vi /etc/cronlock/cronlock.yaml
+
+# Enable and start
+sudo systemctl enable --now cronlock
+
+# Check status
+sudo systemctl status cronlock
+```
+
+For manual installation:
 
 ```bash
 # Copy binary
-sudo cp cronlock /usr/local/bin/
+sudo cp bin/cronlock /usr/local/bin/
 
 # Copy and edit config
 sudo mkdir -p /etc/cronlock

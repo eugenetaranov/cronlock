@@ -1,6 +1,6 @@
 [Unit]
 Description=Cronlock - Distributed Cron Scheduler
-Documentation=https://github.com/your-org/cronlock
+Documentation=https://github.com/eugenetaranov/cronlock
 After=network.target redis.service
 Wants=redis.service
 
