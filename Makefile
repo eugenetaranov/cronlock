@@ -43,7 +43,15 @@ install:
 
 release:
 	@echo "Creating a new release..."
-	@read -p "Enter version (e.g., v0.1.0): " version; \
+	@latest=$$(git describe --tags --abbrev=0 2>/dev/null); \
+	if [ -n "$$latest" ]; then \
+		echo "Latest tag: $$latest"; \
+		next=$$(echo "$$latest" | awk -F. '{print $$1"."$$2"."$$3+1}'); \
+		read -p "Enter version [$$next]: " version; \
+		version=$${version:-$$next}; \
+	else \
+		read -p "Enter version (e.g., v0.1.0): " version; \
+	fi; \
 	git tag -a $$version -m "Release $$version"; \
 	git push origin $$version
 
