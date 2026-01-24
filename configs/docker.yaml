@@ -1,0 +1,18 @@
+# Cronlock Docker Demo Configuration
+# Environment variables are substituted at runtime
+
+node:
+  id: "${NODE_ID:-node-1}"
+  grace_period: 2s
+
+redis:
+  address: "${REDIS_ADDRESS:-redis:6379}"
+  key_prefix: "cronlock:"
+
+jobs:
+  # Demo job: runs every minute to demonstrate distributed locking
+  - name: "demo-job"
+    schedule: "* * * * *"
+    command: "echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Job executed by ${NODE_ID:-unknown}\""
+    timeout: 30s
+    lock_ttl: 1m

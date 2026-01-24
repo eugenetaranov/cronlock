@@ -1,4 +1,4 @@
-.PHONY: build test test-cover test-integration test-all clean run lint fmt deps install release release-dry-run release-snapshot release-check
+.PHONY: build test test-cover test-integration test-all clean run lint fmt deps install release release-dry-run release-snapshot release-check docker-build docker-up docker-down docker-test
 
 BINARY := bin/cronlock
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -54,3 +54,15 @@ release-snapshot:
 
 release-check:
 	goreleaser check
+
+# Docker targets
+docker-build:
+	docker compose build
+
+docker-up:
+	docker compose up --build
+
+docker-down:
+	docker compose down
+
+docker-test: docker-up
