@@ -2,6 +2,8 @@ package lock
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -381,4 +383,89 @@ func TestRedisLocker_Close(t *testing.T) {
 	if err == nil {
 		t.Error("expected error after Close(), got nil")
 	}
+}
+
+func TestRedisLocker_ConcurrentAccess(t *testing.T) {
+	_, client := setupMiniredis(t)
+
+	locker := NewRedisLocker(client, "node-1", "test:")
+	ctx := context.Background()
+
+	const numJobs = 10
+	const numIterations = 50
+
+	var wg sync.WaitGroup
+	wg.Add(numJobs)
+
+	// Simulate multiple jobs running concurrently, each doing acquire/extend/release cycles
+	for i := 0; i < numJobs; i++ {
+		go func(jobNum int) {
+			defer wg.Done()
+			jobName := fmt.Sprintf("concurrent-job-%d", jobNum)
+
+			for j := 0; j < numIterations; j++ {
+				acquired, err := locker.Acquire(ctx, jobName, 30*time.Second)
+				if err != nil {
+					t.Errorf("Acquire() error = %v", err)
+					return
+				}
+
+				if acquired {
+					// Simulate some work and lock extension
+					_, err := locker.Extend(ctx, jobName, 30*time.Second)
+					if err != nil {
+						t.Errorf("Extend() error = %v", err)
+					}
+
+					err = locker.Release(ctx, jobName)
+					if err != nil {
+						t.Errorf("Release() error = %v", err)
+					}
+				}
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+func TestRedisLocker_ConcurrentDifferentOperations(t *testing.T) {
+	_, client := setupMiniredis(t)
+
+	locker := NewRedisLocker(client, "node-1", "test:")
+	ctx := context.Background()
+
+	const numGoroutines = 20
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines * 3) // 3 types of operations
+
+	// Concurrent acquires on different jobs
+	for i := 0; i < numGoroutines; i++ {
+		go func(n int) {
+			defer wg.Done()
+			jobName := fmt.Sprintf("job-%d", n)
+			_, _ = locker.Acquire(ctx, jobName, 30*time.Second)
+		}(i)
+	}
+
+	// Concurrent extends (some will fail as locks aren't held, which is fine)
+	for i := 0; i < numGoroutines; i++ {
+		go func(n int) {
+			defer wg.Done()
+			jobName := fmt.Sprintf("job-%d", n)
+			_, _ = locker.Extend(ctx, jobName, 30*time.Second)
+		}(i)
+	}
+
+	// Concurrent releases (some will be no-ops, which is fine)
+	for i := 0; i < numGoroutines; i++ {
+		go func(n int) {
+			defer wg.Done()
+			jobName := fmt.Sprintf("job-%d", n)
+			_ = locker.Release(ctx, jobName)
+		}(i)
+	}
+
+	wg.Wait()
 }

@@ -3,6 +3,7 @@ package lock
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ type RedisLocker struct {
 	client    *redis.Client
 	nodeID    string
 	keyPrefix string
+	mu        sync.Mutex
 	locks     map[string]string // jobName -> lockValue
 }
 
@@ -67,7 +69,9 @@ func (r *RedisLocker) Acquire(ctx context.Context, jobName string, ttl time.Dura
 	}
 
 	if ok {
+		r.mu.Lock()
 		r.locks[jobName] = value
+		r.mu.Unlock()
 	}
 
 	return ok, nil
@@ -76,22 +80,20 @@ func (r *RedisLocker) Acquire(ctx context.Context, jobName string, ttl time.Dura
 // Release releases the lock using a Lua script for atomicity.
 func (r *RedisLocker) Release(ctx context.Context, jobName string) error {
 	key := r.lockKey(jobName)
+
+	r.mu.Lock()
 	value, ok := r.locks[jobName]
 	if !ok {
+		r.mu.Unlock()
 		// We don't own this lock
 		return nil
 	}
+	delete(r.locks, jobName)
+	r.mu.Unlock()
 
-	result, err := releaseScript.Run(ctx, r.client, []string{key}, value).Int64()
+	_, err := releaseScript.Run(ctx, r.client, []string{key}, value).Int64()
 	if err != nil {
 		return fmt.Errorf("failed to release lock: %w", err)
-	}
-
-	delete(r.locks, jobName)
-
-	if result == 0 {
-		// Lock was already released or owned by someone else
-		return nil
 	}
 
 	return nil
@@ -100,7 +102,11 @@ func (r *RedisLocker) Release(ctx context.Context, jobName string) error {
 // Extend extends the lock TTL using a Lua script for atomicity.
 func (r *RedisLocker) Extend(ctx context.Context, jobName string, ttl time.Duration) (bool, error) {
 	key := r.lockKey(jobName)
+
+	r.mu.Lock()
 	value, ok := r.locks[jobName]
+	r.mu.Unlock()
+
 	if !ok {
 		// We don't own this lock
 		return false, nil
