@@ -89,7 +89,7 @@ Cronlock supports YAML and TOML configuration formats. See `configs/` for exampl
 **Validation** (performed at startup and with `-validate`):
 - Cron schedule syntax is validated before the scheduler starts
 - Redis DB must be 0-15
-- Duration fields (`timeout`, `lock_ttl`, `grace_period`) must be non-negative
+- Duration fields (`timeout`, `lock_ttl`, `grace_period`) must be non-negative and use time unit suffixes (e.g., `30s`, `5m`, `1h`)
 - Job names must be unique
 
 ### Node Configuration
@@ -117,7 +117,7 @@ jobs:
   - name: "backup"           # Unique job name
     schedule: "0 2 * * *"    # Cron expression
     command: "/path/to/script.sh"
-    timeout: 1h              # Max execution time (optional)
+    timeout: 1h              # Max execution time; kills job if exceeded (optional)
     lock_ttl: 2h             # Lock duration (defaults to timeout + 1min)
     work_dir: "/var/backups" # Working directory (optional)
     enabled: true            # Enable/disable job (default: true)
@@ -158,6 +158,55 @@ Special expressions:
 4. **Renewal**: Every TTL/3 for long-running jobs
 5. **Release**: Lua script for atomic check-and-delete
 6. **Grace period**: Configurable delay after completion before release
+
+## Timeout and Overlap Behavior
+
+### What happens when a job is still running at the next scheduled time?
+
+Cronlock **skips** the new execution - it does not queue it. There are two layers of protection:
+
+1. **Same node**: If the job is still running locally, the new run is skipped with a warning log
+2. **Different node**: If another node holds the Redis lock, the new run is skipped silently
+
+### Ensuring jobs run on schedule
+
+If you need the next scheduled run to execute on time, set a `timeout` shorter than your schedule interval:
+
+```yaml
+jobs:
+  - name: "process-data"
+    schedule: "*/5 * * * *"   # Every 5 minutes
+    command: "./process.sh"
+    timeout: 4m               # Kill if still running after 4 minutes
+```
+
+Without a timeout, if `process.sh` takes 7 minutes, the 5-minute mark run gets skipped.
+
+### Choosing the right strategy
+
+| Goal | Configuration |
+|------|---------------|
+| Next run must happen on time | Set `timeout` shorter than schedule interval |
+| Let job finish, skip overlaps | Omit `timeout` (default behavior) |
+| Job must complete, never overlap | Omit `timeout` + ensure schedule interval exceeds max job duration |
+
+### Duration format
+
+**Important**: Always specify time units for duration fields. Valid suffixes:
+- `s` - seconds (e.g., `30s`)
+- `m` - minutes (e.g., `5m`)
+- `h` - hours (e.g., `1h`)
+- Combined: `1h30m`, `2m30s`
+
+```yaml
+# Correct
+timeout: 30s
+timeout: 5m
+timeout: 1h30m
+
+# Wrong - will be rejected as "suspiciously small"
+timeout: 300      # This is 300 nanoseconds, not 300 seconds!
+```
 
 ## Systemd Integration
 

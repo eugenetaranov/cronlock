@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/parsers/yaml"
@@ -131,8 +132,14 @@ func validate(cfg *Config) error {
 		if job.Timeout < 0 {
 			return fmt.Errorf("jobs[%d].timeout must be non-negative, got %v", i, job.Timeout)
 		}
+		if job.Timeout > 0 && job.Timeout < time.Second {
+			return fmt.Errorf("jobs[%d].timeout %v is suspiciously small (did you forget the time unit like '30s' or '5m'?)", i, job.Timeout)
+		}
 		if job.LockTTL < 0 {
 			return fmt.Errorf("jobs[%d].lock_ttl must be non-negative, got %v", i, job.LockTTL)
+		}
+		if job.LockTTL > 0 && job.LockTTL < time.Second {
+			return fmt.Errorf("jobs[%d].lock_ttl %v is suspiciously small (did you forget the time unit like '30s' or '5m'?)", i, job.LockTTL)
 		}
 	}
 

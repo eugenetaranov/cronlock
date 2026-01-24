@@ -699,6 +699,164 @@ jobs:
 	}
 }
 
+func TestLoad_Validation_SuspiciouslySmallDurations(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		errMsg  string
+	}{
+		{
+			name: "small timeout in nanoseconds",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    timeout: 300
+`,
+			errMsg: "jobs[0].timeout 300ns is suspiciously small (did you forget the time unit like '30s' or '5m'?)",
+		},
+		{
+			name: "small lock_ttl in nanoseconds",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    lock_ttl: 300
+`,
+			errMsg: "jobs[0].lock_ttl 300ns is suspiciously small (did you forget the time unit like '30s' or '5m'?)",
+		},
+		{
+			name: "small timeout in milliseconds",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    timeout: 500ms
+`,
+			errMsg: "jobs[0].timeout 500ms is suspiciously small (did you forget the time unit like '30s' or '5m'?)",
+		},
+		{
+			name: "small lock_ttl in milliseconds",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    lock_ttl: 100ms
+`,
+			errMsg: "jobs[0].lock_ttl 100ms is suspiciously small (did you forget the time unit like '30s' or '5m'?)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpFile := writeTempFile(t, "config-small-duration.yaml", tt.content)
+			defer os.Remove(tmpFile)
+
+			_, err := Load(tmpFile)
+			if err == nil {
+				t.Error("expected validation error, got nil")
+				return
+			}
+			if err.Error() != tt.errMsg {
+				t.Errorf("error = %q, want %q", err.Error(), tt.errMsg)
+			}
+		})
+	}
+}
+
+func TestLoad_Validation_ValidSmallDurations(t *testing.T) {
+	// Zero values should be allowed (means no timeout/ttl)
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{
+			name: "zero timeout is valid",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    timeout: 0
+`,
+		},
+		{
+			name: "zero lock_ttl is valid",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    lock_ttl: 0
+`,
+		},
+		{
+			name: "1s timeout is valid",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    timeout: 1s
+`,
+		},
+		{
+			name: "1s lock_ttl is valid",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    lock_ttl: 1s
+`,
+		},
+		{
+			name: "30s timeout is valid",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    timeout: 30s
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpFile := writeTempFile(t, "config-valid-duration.yaml", tt.content)
+			defer os.Remove(tmpFile)
+
+			_, err := Load(tmpFile)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func writeTempFile(t *testing.T, name, content string) string {
 	t.Helper()
 	tmpDir := t.TempDir()
