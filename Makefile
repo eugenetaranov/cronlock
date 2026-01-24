@@ -1,8 +1,9 @@
 .PHONY: build test test-cover test-integration test-all clean run lint fmt deps install release release-dry-run release-snapshot release-check docker-build docker-up docker-down docker-test
 
 BINARY := bin/cronlock
-VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+VERSION := $(shell git describe --tags --exact-match 2>/dev/null || echo "")
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+LDFLAGS := -ldflags "-X main.version=$(VERSION) -X main.gitCommit=$(COMMIT)"
 
 build:
 	@mkdir -p bin

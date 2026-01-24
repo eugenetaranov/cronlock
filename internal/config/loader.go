@@ -10,6 +10,12 @@ import (
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
+	"github.com/robfig/cron/v3"
+)
+
+// cronParser matches the scheduler's parser configuration for consistent validation.
+var cronParser = cron.NewParser(
+	cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
 )
 
 // Load reads and parses a configuration file. Supports YAML and TOML formats
@@ -92,6 +98,16 @@ func validate(cfg *Config) error {
 		return fmt.Errorf("redis.address is required")
 	}
 
+	// Validate Redis DB range (0-15)
+	if cfg.Redis.DB < 0 || cfg.Redis.DB > 15 {
+		return fmt.Errorf("redis.db must be between 0 and 15, got %d", cfg.Redis.DB)
+	}
+
+	// Validate node grace period
+	if cfg.Node.GracePeriod < 0 {
+		return fmt.Errorf("node.grace_period must be non-negative, got %v", cfg.Node.GracePeriod)
+	}
+
 	seen := make(map[string]int)
 	for i, job := range cfg.Jobs {
 		if job.Name == "" {
@@ -104,8 +120,19 @@ func validate(cfg *Config) error {
 		if job.Schedule == "" {
 			return fmt.Errorf("jobs[%d].schedule is required", i)
 		}
+		// Validate cron schedule syntax
+		if _, err := cronParser.Parse(job.Schedule); err != nil {
+			return fmt.Errorf("jobs[%d].schedule %q is invalid: %w", i, job.Schedule, err)
+		}
 		if job.Command == "" {
 			return fmt.Errorf("jobs[%d].command is required", i)
+		}
+		// Validate duration fields
+		if job.Timeout < 0 {
+			return fmt.Errorf("jobs[%d].timeout must be non-negative, got %v", i, job.Timeout)
+		}
+		if job.LockTTL < 0 {
+			return fmt.Errorf("jobs[%d].lock_ttl must be non-negative, got %v", i, job.LockTTL)
 		}
 	}
 

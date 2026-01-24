@@ -19,15 +19,19 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var version = "dev"
+var (
+	version   = "dev"     // git tag or "dev"
+	gitCommit = "unknown" // short commit hash
+)
 
 func main() {
 	configPath := flag.String("config", "cronlock.yaml", "path to configuration file")
 	showVersion := flag.Bool("version", false, "show version and exit")
+	validateOnly := flag.Bool("validate", false, "validate configuration and exit")
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("cronlock %s\n", version)
+		fmt.Println(versionString())
 		os.Exit(0)
 	}
 
@@ -42,6 +46,14 @@ func main() {
 	if err != nil {
 		logger.Error("failed to load configuration", "error", err)
 		os.Exit(1)
+	}
+
+	// Validate-only mode: print success and exit
+	if *validateOnly {
+		fmt.Printf("Configuration valid: %s\n", *configPath)
+		fmt.Printf("  Redis: %s\n", cfg.Redis.Address)
+		fmt.Printf("  Jobs:  %d\n", len(cfg.Jobs))
+		os.Exit(0)
 	}
 
 	// Generate node ID if not specified
@@ -156,4 +168,14 @@ func startWatchdog(logger *slog.Logger) func() {
 	return func() {
 		close(done)
 	}
+}
+
+// versionString returns a formatted version string.
+// If version is set (tagged release): "cronlock v1.0.0 (abc1234)"
+// If no tag: "cronlock abc1234"
+func versionString() string {
+	if version != "" && version != "dev" {
+		return fmt.Sprintf("cronlock %s (%s)", version, gitCommit)
+	}
+	return fmt.Sprintf("cronlock %s", gitCommit)
 }

@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -464,6 +466,199 @@ func TestLoad_FileNotFound(t *testing.T) {
 	_, err := Load("/nonexistent/config.yaml")
 	if err == nil {
 		t.Error("expected error for nonexistent file, got nil")
+	}
+}
+
+func TestLoad_Validation_InvalidCronSchedule(t *testing.T) {
+	tests := []struct {
+		name     string
+		schedule string
+	}{
+		{"invalid syntax", "invalid cron"},
+		{"too few fields", "* *"},
+		{"invalid minute", "60 * * * *"},
+		{"invalid hour", "* 25 * * *"},
+		{"invalid day of month", "* * 32 * *"},
+		{"invalid month", "* * * 13 *"},
+		{"invalid day of week", "* * * * 8"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := fmt.Sprintf(`
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "%s"
+    command: echo test
+`, tt.schedule)
+			tmpFile := writeTempFile(t, "config-invalid-schedule.yaml", content)
+			defer os.Remove(tmpFile)
+
+			_, err := Load(tmpFile)
+			if err == nil {
+				t.Errorf("expected validation error for schedule %q, got nil", tt.schedule)
+			}
+		})
+	}
+}
+
+func TestLoad_Validation_ValidCronSchedules(t *testing.T) {
+	tests := []struct {
+		name     string
+		schedule string
+	}{
+		{"standard cron", "* * * * *"},
+		{"every 5 minutes", "*/5 * * * *"},
+		{"specific time", "30 8 * * *"},
+		{"with second field", "0 * * * * *"},
+		{"descriptor hourly", "@hourly"},
+		{"descriptor daily", "@daily"},
+		{"descriptor weekly", "@weekly"},
+		{"descriptor monthly", "@monthly"},
+		{"descriptor yearly", "@yearly"},
+		{"descriptor every", "@every 1h30m"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := fmt.Sprintf(`
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "%s"
+    command: echo test
+`, tt.schedule)
+			tmpFile := writeTempFile(t, "config-valid-schedule.yaml", content)
+			defer os.Remove(tmpFile)
+
+			_, err := Load(tmpFile)
+			if err != nil {
+				t.Errorf("unexpected error for schedule %q: %v", tt.schedule, err)
+			}
+		})
+	}
+}
+
+func TestLoad_Validation_RedisDBOutOfRange(t *testing.T) {
+	tests := []struct {
+		name string
+		db   int
+	}{
+		{"negative", -1},
+		{"too high", 16},
+		{"way too high", 100},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := fmt.Sprintf(`
+redis:
+  address: localhost:6379
+  db: %d
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+`, tt.db)
+			tmpFile := writeTempFile(t, "config-invalid-db.yaml", content)
+			defer os.Remove(tmpFile)
+
+			_, err := Load(tmpFile)
+			if err == nil {
+				t.Errorf("expected validation error for redis.db=%d, got nil", tt.db)
+			}
+		})
+	}
+}
+
+func TestLoad_Validation_ValidRedisDB(t *testing.T) {
+	for db := 0; db <= 15; db++ {
+		t.Run(fmt.Sprintf("db_%d", db), func(t *testing.T) {
+			content := fmt.Sprintf(`
+redis:
+  address: localhost:6379
+  db: %d
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+`, db)
+			tmpFile := writeTempFile(t, "config-valid-db.yaml", content)
+			defer os.Remove(tmpFile)
+
+			_, err := Load(tmpFile)
+			if err != nil {
+				t.Errorf("unexpected error for redis.db=%d: %v", db, err)
+			}
+		})
+	}
+}
+
+func TestLoad_Validation_NegativeDurations(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		errMsg  string
+	}{
+		{
+			name: "negative timeout",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    timeout: -1s
+`,
+			errMsg: "jobs[0].timeout must be non-negative",
+		},
+		{
+			name: "negative lock_ttl",
+			content: `
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+    lock_ttl: -1s
+`,
+			errMsg: "jobs[0].lock_ttl must be non-negative",
+		},
+		{
+			name: "negative grace_period",
+			content: `
+node:
+  grace_period: -1s
+redis:
+  address: localhost:6379
+jobs:
+  - name: test-job
+    schedule: "* * * * *"
+    command: echo test
+`,
+			errMsg: "node.grace_period must be non-negative",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpFile := writeTempFile(t, "config-negative-duration.yaml", tt.content)
+			defer os.Remove(tmpFile)
+
+			_, err := Load(tmpFile)
+			if err == nil {
+				t.Error("expected validation error, got nil")
+				return
+			}
+			if !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("error = %q, want to contain %q", err.Error(), tt.errMsg)
+			}
+		})
 	}
 }
 

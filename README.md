@@ -58,15 +58,39 @@ cp configs/cronlock.example.yaml cronlock.yaml
 # Edit cronlock.yaml with your jobs and Redis settings
 ```
 
-2. Start cronlock:
+2. Validate your configuration:
 
 ```bash
-./bin/cronlock --config cronlock.yaml
+./bin/cronlock -validate -config cronlock.yaml
 ```
+
+3. Start cronlock:
+
+```bash
+./bin/cronlock -config cronlock.yaml
+```
+
+## Command Line Options
+
+```
+-config string    Path to configuration file (default "cronlock.yaml")
+-validate         Validate configuration and exit (exit 0 on success, 1 on failure)
+-version          Show version and exit
+```
+
+**Version output format:**
+- Tagged release: `cronlock v1.0.0 (abc1234)`
+- Development build: `cronlock abc1234`
 
 ## Configuration
 
 Cronlock supports YAML and TOML configuration formats. See `configs/` for examples.
+
+**Validation** (performed at startup and with `-validate`):
+- Cron schedule syntax is validated before the scheduler starts
+- Redis DB must be 0-15
+- Duration fields (`timeout`, `lock_ttl`, `grace_period`) must be non-negative
+- Job names must be unique
 
 ### Node Configuration
 
@@ -124,6 +148,7 @@ Special expressions:
 - `@weekly` - Once a week
 - `@daily` / `@midnight` - Once a day
 - `@hourly` - Once an hour
+- `@every <duration>` - Every interval (e.g., `@every 1h30m`)
 
 ## Locking Strategy
 
