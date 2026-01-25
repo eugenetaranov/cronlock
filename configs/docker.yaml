@@ -12,7 +12,7 @@ redis:
 jobs:
   # Demo job: runs every minute to demonstrate distributed locking
   - name: "demo-job"
-    schedule: "* * * * *"
+    schedule: "*/2 * * * * *"
     command: "echo \"[$(date '+%Y-%m-%d %H:%M:%S')] Job executed by ${NODE_ID:-unknown}\""
     timeout: 30s
     lock_ttl: 1m
