@@ -15,6 +15,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Wait for CI to pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "Waiting for CI to complete on commit $SHA..."
+          for i in {1..30}; do
+            STATUS=$(gh run list --commit "$SHA" --workflow CI --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"' 2>/dev/null || echo "not_found")
+            echo "Attempt $i: $STATUS"
+            if [[ "$STATUS" == "completed success" ]]; then
+              echo "CI passed!"
+              exit 0
+            elif [[ "$STATUS" == "completed failure" ]] || [[ "$STATUS" == "completed cancelled" ]]; then
+              echo "CI failed or was cancelled"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Timeout waiting for CI"
+          exit 1
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
