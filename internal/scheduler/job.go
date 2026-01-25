@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -10,6 +11,11 @@ import (
 	"cronlock/internal/executor"
 	"cronlock/internal/lock"
 )
+
+// formatDuration formats a duration as seconds with 2 decimal places.
+func formatDuration(d time.Duration) string {
+	return fmt.Sprintf("%.2fs", d.Seconds())
+}
 
 // Job represents a scheduled job with distributed locking.
 type Job struct {
@@ -110,7 +116,7 @@ func (j *Job) Run() {
 	// Log result
 	if result.Success() {
 		j.logger.Info("job completed successfully",
-			"duration", result.Duration,
+			"duration", formatDuration(result.Duration),
 			"exit_code", result.ExitCode,
 		)
 		// Run success hook if configured
@@ -119,7 +125,7 @@ func (j *Job) Run() {
 		}
 	} else {
 		j.logger.Error("job failed",
-			"duration", result.Duration,
+			"duration", formatDuration(result.Duration),
 			"exit_code", result.ExitCode,
 			"error", result.Err,
 			"stderr", result.Stderr,
@@ -132,7 +138,7 @@ func (j *Job) Run() {
 
 	// Wait grace period before releasing lock
 	if j.gracePeriod > 0 {
-		j.logger.Debug("waiting grace period before releasing lock", "duration", j.gracePeriod)
+		j.logger.Debug("waiting grace period before releasing lock", "duration", formatDuration(j.gracePeriod))
 		time.Sleep(j.gracePeriod)
 	}
 
