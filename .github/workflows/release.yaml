@@ -1,29 +1,19 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-
-concurrency:
-  group: release-${{ github.event.workflow_run.head_sha }}
-  cancel-in-progress: true
+  push:
+    tags: ['v*']
 
 permissions:
   contents: write
 
 jobs:
   release:
-    # Only run if CI succeeded AND this was triggered by a tag
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      startsWith(github.event.workflow_run.head_branch, 'v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_branch }}
 
       - uses: actions/setup-go@v5
         with:
