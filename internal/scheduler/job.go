@@ -212,3 +212,13 @@ func (j *Job) IsRunning() bool {
 	defer j.mu.Unlock()
 	return j.running
 }
+
+// Timeout returns the job's configured timeout.
+func (j *Job) Timeout() time.Duration {
+	return j.config.Timeout
+}
+
+// Name returns the job's name.
+func (j *Job) Name() string {
+	return j.config.Name
+}

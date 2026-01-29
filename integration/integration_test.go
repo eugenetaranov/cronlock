@@ -434,6 +434,132 @@ func TestGracefulShutdown(t *testing.T) {
 	assert.NoError(t, err, "job should complete during graceful shutdown")
 }
 
+func TestGracefulShutdown_JobExceedsTimeout(t *testing.T) {
+	ctx := context.Background()
+
+	redis, err := setupRedis(ctx)
+	require.NoError(t, err)
+	defer redis.Terminate(ctx)
+
+	startedFile := filepath.Join(t.TempDir(), "started")
+	completedFile := filepath.Join(t.TempDir(), "completed")
+
+	// Job with 2s timeout that would run for 30s
+	cfg := writeTestConfig(t, redis.Addr(), []JobDef{{
+		Name:     "shutdown-timeout-job",
+		Schedule: "* * * * * *",
+		Command:  fmt.Sprintf("touch %s && sleep 30 && touch %s", startedFile, completedFile),
+		Timeout:  "2s",
+		LockTTL:  "10s",
+	}})
+
+	proc := startCronlock(t, ctx, cfg)
+	defer proc.Cleanup()
+
+	// Wait for job to start
+	err = waitForFile(startedFile, 3*time.Second, 0)
+	require.NoError(t, err)
+
+	// Record time and send shutdown signal
+	start := time.Now()
+	proc.Stop()
+	elapsed := time.Since(start)
+
+	// Should complete in ~2s (job's timeout), not wait for full 30s sleep
+	assert.Less(t, elapsed, 5*time.Second, "shutdown should complete within job timeout + buffer")
+
+	// Job should NOT have completed (was canceled)
+	_, err = os.Stat(completedFile)
+	assert.True(t, os.IsNotExist(err), "job should be canceled before completion")
+}
+
+func TestGracefulShutdown_DefaultTimeout(t *testing.T) {
+	ctx := context.Background()
+
+	redis, err := setupRedis(ctx)
+	require.NoError(t, err)
+	defer redis.Terminate(ctx)
+
+	startedFile := filepath.Join(t.TempDir(), "started")
+	completedFile := filepath.Join(t.TempDir(), "completed")
+
+	// Job with no timeout that runs for 5s (well under 30s default)
+	cfg := writeTestConfig(t, redis.Addr(), []JobDef{{
+		Name:     "no-timeout-job",
+		Schedule: "* * * * * *",
+		Command:  fmt.Sprintf("touch %s && sleep 5 && touch %s", startedFile, completedFile),
+		LockTTL:  "10s",
+	}})
+
+	proc := startCronlock(t, ctx, cfg)
+	defer proc.Cleanup()
+
+	// Wait for job to start
+	err = waitForFile(startedFile, 3*time.Second, 0)
+	require.NoError(t, err)
+
+	// Send shutdown signal
+	proc.Stop()
+
+	// Job should complete (5s < 30s default timeout)
+	err = waitForFile(completedFile, 10*time.Second, 0)
+	assert.NoError(t, err, "job should complete within default 30s timeout")
+}
+
+func TestGracefulShutdown_MultipleJobsDifferentTimeouts(t *testing.T) {
+	ctx := context.Background()
+
+	redis, err := setupRedis(ctx)
+	require.NoError(t, err)
+	defer redis.Terminate(ctx)
+
+	started1 := filepath.Join(t.TempDir(), "started1")
+	started2 := filepath.Join(t.TempDir(), "started2")
+	completed1 := filepath.Join(t.TempDir(), "completed1")
+	completed2 := filepath.Join(t.TempDir(), "completed2")
+
+	cfg := writeTestConfig(t, redis.Addr(), []JobDef{
+		{
+			Name:     "short-timeout-job",
+			Schedule: "* * * * * *",
+			Command:  fmt.Sprintf("touch %s && sleep 30 && touch %s", started1, completed1),
+			Timeout:  "2s",
+			LockTTL:  "10s",
+		},
+		{
+			Name:     "longer-timeout-job",
+			Schedule: "* * * * * *",
+			Command:  fmt.Sprintf("touch %s && sleep 30 && touch %s", started2, completed2),
+			Timeout:  "5s",
+			LockTTL:  "10s",
+		},
+	})
+
+	proc := startCronlock(t, ctx, cfg)
+	defer proc.Cleanup()
+
+	// Wait for both jobs to start
+	err = waitForFile(started1, 3*time.Second, 0)
+	require.NoError(t, err)
+	err = waitForFile(started2, 3*time.Second, 0)
+	require.NoError(t, err)
+
+	// Record time and send shutdown
+	start := time.Now()
+	proc.Stop()
+	elapsed := time.Since(start)
+
+	// Shutdown should take ~5s (the longer timeout), not 30s
+	assert.Less(t, elapsed, 8*time.Second, "shutdown should complete within max job timeout + buffer")
+	assert.Greater(t, elapsed, 2*time.Second, "shutdown should wait at least for shortest timeout")
+
+	// Neither job should complete
+	_, err = os.Stat(completed1)
+	assert.True(t, os.IsNotExist(err), "short-timeout job should be canceled")
+	_, err = os.Stat(completed2)
+	assert.True(t, os.IsNotExist(err), "longer-timeout job should be canceled")
+}
+
 func TestRedisReconnect(t *testing.T) {
 	ctx := context.Background()
 

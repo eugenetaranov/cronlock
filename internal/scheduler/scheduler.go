@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"cronlock/internal/config"
 	"cronlock/internal/executor"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/robfig/cron/v3"
 )
+
+const defaultShutdownTimeout = 30 * time.Second
 
 // Scheduler manages cron job scheduling with distributed locking.
 type Scheduler struct {
@@ -75,11 +78,76 @@ func (s *Scheduler) Start() {
 }
 
 // Stop stops the scheduler and waits for running jobs to complete.
+// Each job is given up to its configured timeout to finish.
+// Jobs without a timeout default to 30 seconds.
 func (s *Scheduler) Stop() {
 	s.logger.Info("stopping scheduler")
-	ctx := s.cron.Stop()
-	<-ctx.Done()
+
+	// Stop accepting new jobs
+	s.cron.Stop()
+
+	// Get currently running jobs
+	s.mu.Lock()
+	var runningJobs []*Job
+	for _, job := range s.jobs {
+		if job.IsRunning() {
+			runningJobs = append(runningJobs, job)
+		}
+	}
+	s.mu.Unlock()
+
+	if len(runningJobs) == 0 {
+		s.logger.Info("no running jobs, scheduler stopped")
+		return
+	}
+
+	s.logger.Info("waiting for running jobs to complete", "count", len(runningJobs))
+
+	// Wait for each job with its timeout
+	var wg sync.WaitGroup
+	for _, job := range runningJobs {
+		wg.Add(1)
+		go func(j *Job) {
+			defer wg.Done()
+			s.waitForJobWithTimeout(j)
+		}(job)
+	}
+
+	wg.Wait()
 	s.logger.Info("scheduler stopped")
+}
+
+// waitForJobWithTimeout waits for a job to complete, canceling it if it exceeds its timeout.
+// Jobs without a configured timeout use defaultShutdownTimeout (30s).
+func (s *Scheduler) waitForJobWithTimeout(job *Job) {
+	timeout := job.Timeout()
+	if timeout == 0 {
+		timeout = defaultShutdownTimeout
+	}
+
+	// Poll for job completion with timeout
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			s.logger.Warn("job exceeded shutdown timeout, canceling",
+				"job", job.Name(),
+				"timeout", timeout,
+			)
+			job.Cancel()
+			return
+		case <-ticker.C:
+			if !job.IsRunning() {
+				s.logger.Info("job completed during shutdown", "job", job.Name())
+				return
+			}
+		}
+	}
 }
 
 // GetJob returns a job by name.
